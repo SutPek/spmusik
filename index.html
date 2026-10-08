@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>SAMC Speedometer + YouTube Music</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b0e12;font-family:system-ui,Segoe UI,sans-serif;color:#eaf0f6;overflow:hidden}
+#speedometer{position:absolute;left:50%;top:50%;transform-origin:center;width:340px;display:flex;flex-direction:column;gap:8px;cursor:grab;user-select:none;touch-action:none}
+.hide{display:none!important}
+.speedo-controls{display:flex;justify-content:center;gap:6px}
+.control-btn{background:#1b222b;color:#eaf0f6;border:1px solid #2c3743;border-radius:6px;width:30px;height:24px;cursor:pointer}
+.control-btn:hover{background:#26303c}
+.dials{position:relative;width:330px;height:190px;margin:auto;border-radius:16px;overflow:hidden;background:#10151b}
+.bg{position:absolute;inset:0;background-size:cover;background-position:center;transition:background-image .3s}
+.wash{position:absolute;inset:0;background:rgba(5,8,12,.45)}
+canvas{position:absolute;left:10px;top:5px}
+.overlay{position:absolute;left:0;right:0;top:62px;text-align:center;display:flex;flex-direction:column;align-items:center;line-height:1}
+#speed-display{font-size:46px;font-weight:700}
+#speed-unit{font-size:12px;opacity:.7;letter-spacing:2px}
+#odometer{font-size:11px;opacity:.6;margin-top:4px}
+.indicators{position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;gap:16px}
+.ind{width:18px;height:18px;fill:#3a4452;opacity:.6;transition:.15s}
+.ind.on{fill:#2ecc71;opacity:1;filter:drop-shadow(0 0 4px #2ecc71)}
+.ind.light.on{fill:#3498db;filter:drop-shadow(0 0 4px #3498db)}
+.bars{display:flex;gap:8px}
+.bar{flex:1;height:18px;background:#1b222b;border-radius:9px;position:relative;overflow:hidden;font-size:11px}
+.fill{height:100%;transition:width .3s}
+.bar span{position:absolute;inset:0;text-align:center;line-height:18px}
+#health-fill{background:#2ecc71}#fuel-fill{background:#f1c40f;color:#000}
+.music{background:#10151b;border:1px solid #232c36;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;cursor:default}
+.music h4{margin:0;font-size:12px;letter-spacing:1px;color:#ff4d4d;display:flex;align-items:center;gap:6px}
+.row{display:flex;gap:6px}
+.music input[type=text]{flex:1;min-width:0;background:#0b0e12;color:#eaf0f6;border:1px solid #2c3743;border-radius:6px;padding:6px 8px;font-size:12px}
+.btn{background:#ff4d4d;color:#fff;border:0;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
+.btn.alt{background:#26303c}
+.title{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+.prog{height:4px;background:#26303c;border-radius:2px;overflow:hidden}
+#yt-prog{height:100%;width:0;background:#ff4d4d}
+.ctrls{display:flex;align-items:center;gap:6px}
+.ctrls input[type=range]{flex:1}
+#queue{margin:0;padding:0;list-style:none;max-height:64px;overflow:auto;font-size:11px}
+#queue li{padding:2px 4px;border-radius:4px;cursor:pointer;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#queue li.cur{background:#26303c;opacity:1}
+#yt-wrap{width:100%;height:200px;border-radius:10px;overflow:hidden;background:#000}
+#yt-wrap iframe{width:100%;height:100%}
+.demo{font-size:11px;opacity:.7;display:flex;gap:6px;align-items:center}
+.demo input{flex:1}
+#msg{font-size:11px;color:#f39c12;min-height:13px}
+</style>
+</head>
+<body>
+<div id="speedometer">
+  <div class="speedo-controls">
+    <button id="btn-scale-down" class="control-btn" title="Perkecil">−</button>
+    <button id="btn-reset" class="control-btn" title="Reset posisi & ukuran">↺</button>
+    <button id="btn-scale-up" class="control-btn" title="Perbesar">+</button>
+  </div>
+
+  <div class="dials">
+    <div id="speed-bg" class="bg"></div><div class="wash"></div>
+    <canvas id="speedo-canvas" width="310" height="180"></canvas>
+    <div class="overlay">
+      <span id="speed-display">0</span><span id="speed-unit">mph</span><span id="odometer">0.0 mi</span>
+    </div>
+    <div class="indicators">
+      <svg id="indicator-left" class="ind" viewBox="0 0 512 512"><polygon points="316.5,153.6 316.5,18.6 0,256 316.5,493.4 316.5,358.4 512,358.4 512,153.6"/></svg>
+      <svg id="indicator-headlights" class="ind light" viewBox="0 0 256 256"><path d="M144,64V192a16,16,0,0,1-16,16H88A80,80,0,0,1,8,127.4C8.3,83.6,44.6,48,88.9,48H128A16,16,0,0,1,144,64Zm96,104H168a8,8,0,0,0,0,16h72a8,8,0,0,0,0-16ZM168,88h72a8,8,0,0,0,0-16H168a8,8,0,0,0,0,16Zm72,16H168a8,8,0,0,0,0,16h72a8,8,0,0,0,0-16Zm0,32H168a8,8,0,0,0,0,16h72a8,8,0,0,0,0-16Z"/></svg>
+      <svg id="indicator-right" class="ind" viewBox="0 0 512 512"><polygon points="512,256 195.5,18.6 195.5,153.6 0,153.6 0,358.4 195.5,358.4 195.5,493.4"/></svg>
+    </div>
+  </div>
+
+  <div class="bars">
+    <div class="bar"><div id="health-fill" class="fill" style="width:100%"></div><span id="health-text">100%</span></div>
+    <div class="bar"><div id="fuel-fill" class="fill" style="width:100%"></div><span id="fuel-text">100%</span></div>
+  </div>
+
+  <!-- ===== YouTube Music Player ===== -->
+  <div class="music" id="music">
+    <h4>▶ YOUTUBE MUSIC</h4>
+    <div class="row">
+      <input type="text" id="yt-input" placeholder="Tempel link YouTube (video / playlist)" autocomplete="off">
+      <button class="btn" id="yt-play">Putar</button>
+      <button class="btn alt" id="yt-add" title="Tambah ke antrean">+</button>
+    </div>
+    <div id="msg"></div>
+    <div class="title" id="yt-title">Belum ada lagu</div>
+    <div class="prog"><div id="yt-prog"></div></div>
+    <div class="ctrls">
+      <button class="btn alt" id="yt-prev">⏮</button>
+      <button class="btn" id="yt-toggle">⏯</button>
+      <button class="btn alt" id="yt-next">⏭</button>
+      <span>🔊</span><input type="range" id="yt-vol" min="0" max="100" value="70">
+    </div>
+    <ul id="queue"></ul>
+  </div>
+  <div id="yt-wrap"><div id="yt-player"></div></div>
+
+  <div class="demo">Demo kecepatan <input type="range" id="demo" min="0" max="240" value="0"></div>
+</div>
+
+<script>
+/* ================= SPEEDOMETER ================= */
+// Ganti path gambar sesuai repo: assets/01.png ... assets/06.png
+const SPEED_BG_STAGES=[
+  {max:20,img:'assets/01.png'},{max:60,img:'assets/02.png'},{max:120,img:'assets/03.png'},
+  {max:160,img:'assets/04.png'},{max:200,img:'assets/05.png'},{max:Infinity,img:'assets/06.png'}];
+const MAX_SPEED=240;
+const st={speed:0,shown:0,unit:'mph',health:100,fuel:100,left:false,right:false,lights:false,odo:0};
+const $=id=>document.getElementById(id);
+const cv=$('speedo-canvas'),ctx=cv.getContext('2d');
+
+function drawDial(){
+  const w=310,h=180,cx=w/2,cy=h-18,r=125,a0=Math.PI*0.85,a1=Math.PI*2.15;
+  ctx.clearRect(0,0,w,h);
+  ctx.lineCap='round';ctx.lineWidth=10;
+  ctx.strokeStyle='#26303c';ctx.beginPath();ctx.arc(cx,cy,r,a0,a1);ctx.stroke();
+  const f=Math.min(st.shown/MAX_SPEED,1),ae=a0+(a1-a0)*f;
+  const g=ctx.createLinearGradient(0,0,w,0);g.addColorStop(0,'#2ecc71');g.addColorStop(.6,'#f1c40f');g.addColorStop(1,'#e74c3c');
+  ctx.strokeStyle=g;ctx.beginPath();ctx.arc(cx,cy,r,a0,ae);ctx.stroke();
+  ctx.lineWidth=2;ctx.fillStyle='#9fb0c0';ctx.font='10px system-ui';ctx.textAlign='center';
+  for(let v=0;v<=MAX_SPEED;v+=10){
+    const a=a0+(a1-a0)*v/MAX_SPEED,big=v%40===0,r1=r-10,r2=r-(big?22:16);
+    ctx.strokeStyle=big?'#cfd8e0':'#5b6877';
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);ctx.lineTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2);ctx.stroke();
+    if(big)ctx.fillText(v,cx+Math.cos(a)*(r-36),cy+Math.sin(a)*(r-36)+3);
+  }
+  ctx.strokeStyle='#ff4d4d';ctx.lineWidth=3;ctx.beginPath();
+  ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(ae)*(r-14),cy+Math.sin(ae)*(r-14));ctx.stroke();
+  ctx.fillStyle='#ff4d4d';ctx.beginPath();ctx.arc(cx,cy,5,0,7);ctx.fill();
+}
+let lastT=performance.now(),blink=false,blinkT=0;
+function loop(t){
+  const dt=(t-lastT)/1000;lastT=t;
+  st.shown+=(st.speed-st.shown)*Math.min(1,dt*6);
+  st.odo+=st.shown/3600*dt;
+  blinkT+=dt;if(blinkT>.4){blinkT=0;blink=!blink}
+  $('speed-display').textContent=Math.round(st.shown);
+  $('odometer').textContent=st.odo.toFixed(1)+(st.unit==='kmh'?' km':' mi');
+  $('indicator-left').classList.toggle('on',st.left&&blink);
+  $('indicator-right').classList.toggle('on',st.right&&blink);
+  $('indicator-headlights').classList.toggle('on',st.lights);
+  drawDial();requestAnimationFrame(loop);
+}
+let curBg='';
+function updateBg(){
+  const s=SPEED_BG_STAGES.find(x=>Math.round(st.speed)<=x.max);
+  if(s&&s.img!==curBg){curBg=s.img;$('speed-bg').style.backgroundImage=`url(${s.img})`}
+}
+function setBars(){
+  $('health-fill').style.width=st.health+'%';$('health-text').textContent=Math.round(st.health)+'%';
+  $('fuel-fill').style.width=st.fuel+'%';$('fuel-text').textContent=Math.round(st.fuel)+'%';
+}
+/* Hook untuk telemetry asli: window.updateSpeedo({speed,health,fuel,left,right,lights,unit}) */
+window.updateSpeedo=d=>{Object.assign(st,d);$('speed-unit').textContent=st.unit;updateBg();setBars()};
+$('demo').oninput=e=>{st.speed=+e.target.value;updateBg()};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='q')st.left=!st.left;if(e.key==='e')st.right=!st.right;if(e.key==='l')st.lights=!st.lights;
+});
+requestAnimationFrame(loop);updateBg();
+
+/* Drag + scale */
+const box=$('speedometer');let scale=1,px=0,py=0;
+const applyT=()=>box.style.transform=`translate(calc(-50% + ${px}px),calc(-50% + ${py}px)) scale(${scale})`;
+$('btn-scale-up').onclick=()=>{scale=Math.min(2,scale+.1);applyT()};
+$('btn-scale-down').onclick=()=>{scale=Math.max(.5,scale-.1);applyT()};
+$('btn-reset').onclick=()=>{scale=1;px=py=0;applyT()};
+let drag=null;
+box.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.music,.demo,.speedo-controls'))return;
+  drag={x:e.clientX-px,y:e.clientY-py};box.setPointerCapture(e.pointerId);box.style.cursor='grabbing'});
+box.addEventListener('pointermove',e=>{if(drag){px=e.clientX-drag.x;py=e.clientY-drag.y;applyT()}});
+box.addEventListener('pointerup',()=>{drag=null;box.style.cursor='grab'});
+applyT();
+
+/* ================= YOUTUBE MUSIC ================= */
+let player=null,apiReady=false,pending=null,queue=[],idx=-1,ticker=null;
+const msg=t=>{$('msg').textContent=t||'';if(t)setTimeout(()=>{if($('msg').textContent===t)$('msg').textContent=''},3500)};
+
+function parseYT(u){
+  u=u.trim();
+  const list=u.match(/[?&]list=([\w-]+)/),vid=u.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
+  if(list)return{type:'playlist',id:list[1],label:'Playlist '+list[1].slice(0,8)};
+  if(vid)return{type:'video',id:vid[1],label:'Video '+vid[1]};
+  if(/^[\w-]{11}$/.test(u))return{type:'video',id:u,label:'Video '+u};
+  return null;
+}
+function loadAPI(){
+  if(location.protocol==='file:')msg('Buka lewat http://localhost atau GitHub Pages, bukan file://');
+  if(window.YT&&YT.Player){apiReady=true;return}
+  if(document.getElementById('yt-api'))return;
+  const s=document.createElement('script');s.id='yt-api';s.src='https://www.youtube.com/iframe_api';
+  s.onerror=()=>msg('Gagal memuat YouTube API (cek internet).');
+  document.head.appendChild(s);
+}
+window.onYouTubeIframeAPIReady=()=>{
+  apiReady=true;
+  player=new YT.Player('yt-player',{height:'200',width:'100%',playerVars:Object.assign({playsinline:1,controls:1,rel:0},location.protocol.startsWith('http')?{origin:location.origin}:{}),events:{
+    onReady:()=>{player.setVolume(+$('yt-vol').value);if(pending){playItem(pending);pending=null}},
+    onStateChange:e=>{
+      if(e.data===YT.PlayerState.ENDED&&queue[idx]&&queue[idx].type==='video')next();
+      if(e.data===YT.PlayerState.PLAYING)refreshTitle();
+    },
+    onAutoplayBlocked:()=>msg('Browser memblokir autoplay. Tekan tombol ⏯ atau tombol play di video.'),
+    onError:e=>{const m={2:'Link video tidak valid',5:'Error pemutar HTML5',100:'Video tidak ditemukan/privat',101:'Pemilik melarang disematkan',150:'Pemilik melarang disematkan',153:'Halaman harus dibuka lewat http(s), bukan file://'}[e.data]||('Error '+e.data);msg(m+' (kode '+e.data+')');if([100,101,150].includes(e.data))setTimeout(next,1500)}
+  }});
+};
+function playItem(it){
+  if(!player||!player.loadVideoById){pending=it;return}
+  if(it.type==='playlist')player.loadPlaylist({list:it.id,listType:'playlist'});
+  else player.loadVideoById(it.id);
+  if(!ticker)ticker=setInterval(tick,500);
+}
+function tick(){
+  if(!player||!player.getDuration)return;
+  const d=player.getDuration(),c=player.getCurrentTime();
+  $('yt-prog').style.width=d?(c/d*100)+'%':'0';
+}
+function refreshTitle(){
+  try{
+    const t=player.getVideoData().title;
+    if(t){$('yt-title').textContent='🎵 '+t;if(queue[idx]){queue[idx].label=t;renderQ()}}
+  }catch(e){}
+}
+function renderQ(){
+  const ul=$('queue');ul.innerHTML='';
+  queue.forEach((q,i)=>{
+    const li=document.createElement('li');li.textContent=(i+1)+'. '+q.label;
+    if(i===idx)li.className='cur';li.onclick=()=>go(i);ul.appendChild(li);
+  });
+}
+function go(i){
+  if(!queue.length)return;
+  idx=(i+queue.length)%queue.length;renderQ();
+  $('yt-title').textContent='Memuat...';playItem(queue[idx]);
+}
+const next=()=>go(idx+1),prev=()=>go(idx-1);
+function addFromInput(playNow){
+  const it=parseYT($('yt-input').value);
+  if(!it){msg('Link YouTube tidak valid.');return}
+  loadAPI();queue.push(it);$('yt-input').value='';renderQ();
+  if(playNow||idx<0)go(queue.length-1);
+}
+$('yt-play').onclick=()=>addFromInput(true);
+$('yt-add').onclick=()=>addFromInput(false);
+$('yt-input').addEventListener('keydown',e=>{if(e.key==='Enter')addFromInput(true)});
+$('yt-next').onclick=()=>{if(player&&queue[idx]&&queue[idx].type==='playlist'&&player.nextVideo)player.nextVideo();else next()};
+$('yt-prev').onclick=()=>{if(player&&queue[idx]&&queue[idx].type==='playlist'&&player.previousVideo)player.previousVideo();else prev()};
+$('yt-toggle').onclick=()=>{
+  if(!player||!player.getPlayerState)return;
+  player.getPlayerState()===1?player.pauseVideo():player.playVideo();
+};
+$('yt-vol').oninput=e=>{if(player&&player.setVolume)player.setVolume(+e.target.value)};
+</script>
+</body>
+</html>
